@@ -1,0 +1,13 @@
+foodprint/data/utils/KeyUtils.class
+foodprint/data/utils/RestaurantJsonMapper.class
+foodprint/data/entity/Restaurant.class
+foodprint/data/utils/UserJsonMapper.class
+foodprint/data/entity/Rank.class
+foodprint/app/Application.class
+foodprint/data/entity/Activity.class
+foodprint/rest/RestaurantController.class
+foodprint/data/utils/ActivityJsonMapper.class
+foodprint/rest/FeedController.class
+foodprint/data/utils/JsonObjectMapper.class
+foodprint/data/entity/User.class
+foodprint/rest/PeopleController.class
