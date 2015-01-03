@@ -1,26 +1,18 @@
 package foodprint.rest;
 
-import com.fasterxml.jackson.databind.JavaType;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.type.TypeFactory;
+import foodprint.data.entity.*;
 import foodprint.data.utils.ActivityJsonMapper;
-import foodprint.data.utils.JsonObjectMapper;
 import foodprint.data.utils.KeyUtils;
-import foodprint.data.entity.Activity;
-import foodprint.data.entity.Rank;
-import foodprint.data.entity.Restaurant;
 import foodprint.data.utils.RestaurantJsonMapper;
+import foodprint.data.utils.UserJsonMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import redis.clients.jedis.*;
 
-import java.io.IOException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -38,6 +30,9 @@ public class FeedController {
 
     @Autowired
     private RestaurantJsonMapper restaurantMapper;
+
+    @Autowired
+    private UserJsonMapper userMapper;
 
     @RequestMapping("/{userId}/timeline")
     public List<Activity> timeline(@PathVariable Long userId) {
@@ -59,24 +54,70 @@ public class FeedController {
         }
     }
 
-    @RequestMapping("/{userId}/ranking")
-    public List<Rank> ranking(@PathVariable Long userId) {
-        try(Jedis jedis = jedisPool.getResource()) {
+    @RequestMapping("/{userId}/popularity")
+    public List<RankByPopularity> popularity(@PathVariable Long userId) {
+        try (Jedis jedis = jedisPool.getResource()) {
             Set<Tuple> rankingWithScore = jedis.zrevrangeWithScores(KeyUtils.rankingOf(userId), 0, -1);
-            rankingWithScore.forEach(x -> System.out.println("restaurantId: " + x.getElement() + "\tscore: " + x.getScore()));
-            List<String> restaurantKeys = rankingWithScore.stream()
+            Set<Tuple> popularityWithScore = jedis.zrevrangeWithScores(KeyUtils.popularityOf(userId), 0, -1);
+            List<String> restaurantKeys = popularityWithScore.stream()
                     .map(t -> KeyUtils.restaurant(Long.valueOf(t.getElement())))
                     .collect(Collectors.toList());
-            List<Integer> scores = rankingWithScore.stream()
-                    .map(t -> (int)t.getScore())
+            List<Double> popularity = popularityWithScore.stream()
+                    .map(t -> t.getScore())
                     .collect(Collectors.toList());
+            Map<Long, Double> ranking = new HashMap<>();
+            rankingWithScore.forEach(t -> ranking.put(Long.valueOf(t.getElement()), t.getScore()));
+
             List<Restaurant> restaurants = getRestaurants(jedis, restaurantKeys);
-            List<Rank> ranks = new ArrayList<>(rankingWithScore.size());
-            for (int i = 0; i < rankingWithScore.size(); i++) {
-                Rank r = new Rank(restaurants.get(i), scores.get(i));
+            List<RankByPopularity> ranks = new ArrayList<>(popularityWithScore.size());
+
+            for (int i = 0; i < popularityWithScore.size(); i++) {
+                Restaurant restaurant = restaurants.get(i);
+                Double averageScore = ranking.get(restaurant.getId()) / popularity.get(i);
+
+                RankByPopularity r = new RankByPopularity(restaurant, averageScore, popularity.get(i).intValue());
                 ranks.add(r);
             }
             return ranks;
+        }
+    }
+
+    @RequestMapping("/{userId}/ranking")
+    public List<RankByScore> ranking(@PathVariable Long userId) {
+        try(Jedis jedis = jedisPool.getResource()) {
+            Set<Tuple> rankingWithScore = jedis.zrevrangeWithScores(KeyUtils.rankingOf(userId), 0, -1);
+            Set<Tuple> popularityWithScore = jedis.zrevrangeWithScores(KeyUtils.popularityOf(userId), 0, -1);
+            List<String> restaurantKeys = rankingWithScore.stream()
+                    .map(t -> KeyUtils.restaurant(Long.valueOf(t.getElement())))
+                    .collect(Collectors.toList());
+            List<Double> scores = rankingWithScore.stream()
+                    .map(t -> t.getScore())
+                    .collect(Collectors.toList());
+            Map<Long, Double> popularity = new HashMap<>();
+            popularityWithScore.forEach(t -> popularity.put(Long.valueOf(t.getElement()), t.getScore()));
+
+            List<Restaurant> restaurants = getRestaurants(jedis, restaurantKeys);
+            List<RankByScore> ranks = new ArrayList<>(rankingWithScore.size());
+
+            for (int i = 0; i < rankingWithScore.size(); i++) {
+                Restaurant restaurant = restaurants.get(i);
+                Double averageScore = scores.get(i) / popularity.get(restaurant.getId());
+
+                String visitorKey = KeyUtils.visitorsOf(restaurant.getId());
+                String followingKey = KeyUtils.followingOf(userId);
+                String viewKey = KeyUtils.viewOf(restaurant.getId(), userId);
+                jedis.zinterstore(viewKey, visitorKey, followingKey);
+
+                List<String> visitorKeys = jedis.zrevrange(viewKey, 0, -1).stream()
+                        .map(x -> KeyUtils.user(Long.valueOf(x)))
+                        .collect(Collectors.toList());
+
+                RankByScore r = new RankByScore(restaurant, averageScore, getUsers(jedis, visitorKeys));
+                ranks.add(r);
+            }
+
+            Comparator<RankByScore> comparator = (e1, e2) -> Double.compare(e2.getScore(), e1.getScore());
+            return ranks.stream().sorted(comparator).collect(Collectors.toList());
         }
     }
 
@@ -99,6 +140,7 @@ public class FeedController {
         try(Jedis jedis = jedisPool.getResource()) {
             Long epochMillis = Instant.now().toEpochMilli();
             activity.setId(jedis.incr(KeyUtils.activityCount()));
+            activity.setTimeStamp(epochMillis);
             String jsonActivity = activityMapper.serialize(activity);
 
             List<Long> followerId = jedis.smembers(KeyUtils.followersOf(activity.getUserId())).parallelStream()
@@ -114,10 +156,17 @@ public class FeedController {
             }
 
             pipeline.zadd(KeyUtils.activitiesOf(activity.getUserId()), epochMillis, activity.getId().toString());
+            pipeline.zadd(KeyUtils.timelineOf(activity.getUserId()), epochMillis, activity.getId().toString());
+            pipeline.zadd(KeyUtils.recommendationOf(activity.getRestaurantId()), epochMillis, activity.getId().toString());
+            pipeline.zadd(KeyUtils.visitorsOf(activity.getRestaurantId()), epochMillis, activity.getUserId().toString());
+
+            pipeline.zincrby(KeyUtils.rankingOf(activity.getUserId()), activity.getScore(), activity.getRestaurantId().toString());
+            pipeline.zincrby(KeyUtils.popularityOf(activity.getUserId()), 1.0, activity.getRestaurantId().toString());
+            pipeline.zincrby(KeyUtils.visitingOf(activity.getUserId()), 1.0, activity.getRestaurantId().toString());
+
             followerId.forEach(x -> pipeline.zadd(KeyUtils.timelineOf(x), epochMillis, activity.getId().toString()));
             followerId.forEach(x -> pipeline.zincrby(KeyUtils.rankingOf(x), activity.getScore(), activity.getRestaurantId().toString()));
-            pipeline.zincrby(KeyUtils.rankingOf(activity.getUserId()), activity.getScore(), activity.getRestaurantId().toString());
-            pipeline.zadd(KeyUtils.recommendationOf(activity.getRestaurantId()), epochMillis, activity.getId().toString());
+            followerId.forEach(x -> pipeline.zincrby(KeyUtils.popularityOf(x), 1.0, activity.getRestaurantId().toString()));
 
             pipeline.sync();
 
@@ -145,6 +194,17 @@ public class FeedController {
         pipeline.sync();
         return responses.stream()
                 .map(x -> restaurantMapper.parse(x.get()))
+                .collect(Collectors.toList());
+    }
+
+    private List<User> getUsers(Jedis jedis, List<String> userKeys) {
+        Pipeline pipeline = jedis.pipelined();
+        List<Response<String>> responses = userKeys.stream()
+                .map(pipeline::get)
+                .collect(Collectors.toList());
+        pipeline.sync();
+        return responses.stream()
+                .map(x -> userMapper.parse(x.get()))
                 .collect(Collectors.toList());
     }
 

@@ -11,15 +11,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.Pipeline;
-import redis.clients.jedis.Response;
+import redis.clients.jedis.*;
 
 import javax.validation.constraints.NotNull;
 import java.io.IOException;
 import java.security.Key;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
@@ -63,9 +61,14 @@ public class PeopleController {
         try(Jedis jedis = jedisPool.getResource()) {
             if(!jedis.exists(KeyUtils.user(followingId)) || !jedis.exists(KeyUtils.user(userId)))
                 throw new IllegalArgumentException("specified user doesn't exist.");
+            Set<Tuple> visitingOfFollowing = jedis.zrevrangeWithScores(KeyUtils.visitingOf(followingId), 0, -1);
+            Set<Tuple> rankingOfFollowing = jedis.zrevrangeWithScores(KeyUtils.rankingOf(followingId), 0, -1);
             Pipeline pipeline = jedis.pipelined();
             pipeline.sadd(KeyUtils.followingOf(userId), followingId.toString());
             pipeline.sadd(KeyUtils.followersOf(followingId), userId.toString());
+            pipeline.zunionstore(KeyUtils.timelineOf(userId), KeyUtils.timelineOf(userId), KeyUtils.activitiesOf(followingId));
+            visitingOfFollowing.forEach(t -> pipeline.zincrby(KeyUtils.popularityOf(userId), t.getScore(), t.getElement()));
+            rankingOfFollowing.forEach(t -> pipeline.zincrby(KeyUtils.rankingOf(userId), t.getScore(), t.getElement()));
             pipeline.sync();
             return jedis.scard(KeyUtils.followingOf(userId));
         }

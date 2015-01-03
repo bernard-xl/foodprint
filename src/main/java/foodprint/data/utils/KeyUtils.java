@@ -29,6 +29,14 @@ public class KeyUtils {
         return String.format(FORMAT, "rankingOf", SEPARATOR, userId);
     }
 
+    public static String visitingOf(long userId) {
+        return String.format(FORMAT, "visitingOf", SEPARATOR, userId);
+    }
+
+    public static String popularityOf(long userId) {
+        return String.format(FORMAT, "popularityOf", SEPARATOR, userId);
+    }
+
     public static String activitiesOf(long userId) {
         return String.format(FORMAT, "activitiesOf", SEPARATOR, userId);
     }
