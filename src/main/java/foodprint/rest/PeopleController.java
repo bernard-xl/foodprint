@@ -66,6 +66,7 @@ public class PeopleController {
             Pipeline pipeline = jedis.pipelined();
             pipeline.sadd(KeyUtils.followingOf(userId), followingId.toString());
             pipeline.sadd(KeyUtils.followersOf(followingId), userId.toString());
+            pipeline.zunionstore(KeyUtils.timelineOf(userId), KeyUtils.timelineOf(userId), KeyUtils.activitiesOf(followingId));
             pipeline.sync();
             return jedis.scard(KeyUtils.followingOf(userId));
         }

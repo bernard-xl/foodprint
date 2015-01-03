@@ -1,6 +1,6 @@
 package foodprint.data.entity;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -20,7 +20,7 @@ public class Activity {
 
     private List<String> dishes;
 
-    private LocalDateTime dateTime;
+    private Long timeStamp;
 
     public Activity() {
     }
@@ -30,7 +30,7 @@ public class Activity {
         this.restaurantId = restaurantId;
         this.score = score;
         this.comment = comment;
-        this.dateTime = LocalDateTime.now();
+        this.timeStamp = Instant.now().getEpochSecond();
     }
 
     public Long getId() {
@@ -81,11 +81,11 @@ public class Activity {
         this.dishes = dishes;
     }
 
-    public LocalDateTime getDateTime() {
-        return dateTime;
+    public Long getTimeStamp() {
+        return timeStamp;
     }
 
-    public void setDateTime(LocalDateTime dateTime) {
-        this.dateTime = dateTime;
+    public void setTimeStamp(Long timeStamp) {
+        this.timeStamp = timeStamp;
     }
 }

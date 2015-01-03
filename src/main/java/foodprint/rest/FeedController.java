@@ -1,10 +1,6 @@
 package foodprint.rest;
 
-import com.fasterxml.jackson.databind.JavaType;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.type.TypeFactory;
 import foodprint.data.utils.ActivityJsonMapper;
-import foodprint.data.utils.JsonObjectMapper;
 import foodprint.data.utils.KeyUtils;
 import foodprint.data.entity.Activity;
 import foodprint.data.entity.Rank;
@@ -16,8 +12,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import redis.clients.jedis.*;
 
-import java.io.IOException;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -99,6 +95,7 @@ public class FeedController {
         try(Jedis jedis = jedisPool.getResource()) {
             Long epochMillis = Instant.now().toEpochMilli();
             activity.setId(jedis.incr(KeyUtils.activityCount()));
+            activity.setTimeStamp(epochMillis);
             String jsonActivity = activityMapper.serialize(activity);
 
             List<Long> followerId = jedis.smembers(KeyUtils.followersOf(activity.getUserId())).parallelStream()
@@ -114,6 +111,7 @@ public class FeedController {
             }
 
             pipeline.zadd(KeyUtils.activitiesOf(activity.getUserId()), epochMillis, activity.getId().toString());
+            pipeline.zadd(KeyUtils.timelineOf(activity.getUserId()), epochMillis, activity.getId().toString());
             followerId.forEach(x -> pipeline.zadd(KeyUtils.timelineOf(x), epochMillis, activity.getId().toString()));
             followerId.forEach(x -> pipeline.zincrby(KeyUtils.rankingOf(x), activity.getScore(), activity.getRestaurantId().toString()));
             pipeline.zincrby(KeyUtils.rankingOf(activity.getUserId()), activity.getScore(), activity.getRestaurantId().toString());
