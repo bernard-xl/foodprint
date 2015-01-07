@@ -1,5 +1,9 @@
 package foodprint.app;
 
+import foodprint.data.entity.FoodPrint;
+import foodprint.data.entity.Restaurant;
+import foodprint.data.entity.User;
+import foodprint.data.utils.JsonObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -16,12 +20,16 @@ import redis.clients.jedis.JedisPoolConfig;
  */
 @Configuration
 @PropertySource("redis.properties")
-@ComponentScan({"foodprint.data", "foodprint.rest"})
+@ComponentScan({"foodprint.data", "foodprint.controller"})
 @EnableAutoConfiguration
 public class Application {
 
     @Autowired
     private Environment environment;
+
+    public static void main(String... args) {
+        SpringApplication.run(Application.class, args);
+    }
 
     @Bean
     public JedisPool jedisPool(JedisPoolConfig poolConfig) {
@@ -42,7 +50,18 @@ public class Application {
         return config;
     }
 
-    public static void main(String ...args) {
-        SpringApplication.run(Application.class, args);
+    @Bean
+    public JsonObjectMapper<FoodPrint> foodPrintMapper() {
+        return new JsonObjectMapper<>(FoodPrint.class);
+    }
+
+    @Bean
+    public JsonObjectMapper<Restaurant> restaurantMapper() {
+        return new JsonObjectMapper<>(Restaurant.class);
+    }
+
+    @Bean
+    public JsonObjectMapper<User> userMapper() {
+        return new JsonObjectMapper<>(User.class);
     }
 }

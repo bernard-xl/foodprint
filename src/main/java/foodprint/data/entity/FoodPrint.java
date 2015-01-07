@@ -1,12 +1,11 @@
 package foodprint.data.entity;
 
-import java.time.Instant;
 import java.util.List;
 
 /**
- * Created by bernard on 21/12/14.
+ * Created by bernard on 6/1/15.
  */
-public class Activity {
+public class FoodPrint {
 
     private Long id;
 
@@ -14,7 +13,7 @@ public class Activity {
 
     private Long restaurantId;
 
-    private Float score;
+    private Double rating;
 
     private String comment;
 
@@ -22,15 +21,14 @@ public class Activity {
 
     private Long timeStamp;
 
-    public Activity() {
+    public FoodPrint() {
     }
 
-    public Activity(Long userId, Long restaurantId, Float score, String comment) {
+    public FoodPrint(Long userId, Long restaurantId, Double rating, String comment) {
         this.userId = userId;
         this.restaurantId = restaurantId;
-        this.score = score;
+        this.rating = rating;
         this.comment = comment;
-        this.timeStamp = Instant.now().getEpochSecond();
     }
 
     public Long getId() {
@@ -57,12 +55,12 @@ public class Activity {
         this.restaurantId = restaurantId;
     }
 
-    public Float getScore() {
-        return score;
+    public Double getRating() {
+        return rating;
     }
 
-    public void setScore(Float score) {
-        this.score = score;
+    public void setRating(Double rating) {
+        this.rating = rating;
     }
 
     public String getComment() {

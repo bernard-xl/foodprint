@@ -1,7 +1,7 @@
 package foodprint.data.entity;
 
 /**
- * Created by bernard on 21/12/14.
+ * Created by bernard on 6/1/15.
  */
 public class User {
 

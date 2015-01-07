@@ -8,19 +8,17 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.type.TypeFactory;
 
 import java.io.IOException;
-import java.lang.reflect.ParameterizedType;
 
 /**
- * Created by bernard on 28/12/14.
+ * Created by bernard on 6/1/15.
  */
-public abstract class JsonObjectMapper<T> {
+public class JsonObjectMapper<T> {
 
     private ObjectReader objectReader;
     private ObjectWriter objectWriter;
 
-    public JsonObjectMapper() {
-        ParameterizedType parameterizedType = (ParameterizedType)getClass().getGenericSuperclass();
-        JavaType objectType = TypeFactory.defaultInstance().constructType(parameterizedType.getActualTypeArguments()[0]);
+    public JsonObjectMapper(Class<T> clazz) {
+        JavaType objectType = TypeFactory.defaultInstance().constructType(clazz);
         ObjectMapper objectMapper = new ObjectMapper();
         this.objectReader = objectMapper.reader().withType(objectType);
         this.objectWriter = objectMapper.writer().withType(objectType);
@@ -43,4 +41,3 @@ public abstract class JsonObjectMapper<T> {
         }
     }
 }
-
